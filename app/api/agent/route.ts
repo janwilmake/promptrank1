@@ -6,6 +6,8 @@ import { adminDb } from "@/lib/db";
 import { inngest } from "@/inngest/client";
 import { logError, logInfo } from "@/lib/log";
 
+const MAX_GENERATED_PROMPTS = 5;
+
 export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
@@ -39,7 +41,12 @@ export async function POST(req: NextRequest) {
   // Run research agent
   const research = await researchDomainAndGeneratePrompts(domain);
   const generatedPrompts = Array.isArray(research.prompts)
-    ? research.prompts.filter((prompt): prompt is string => typeof prompt === "string" && prompt.trim().length > 0)
+    ? [...new Set(
+        research.prompts
+          .filter((prompt): prompt is string => typeof prompt === "string")
+          .map((prompt) => prompt.trim())
+          .filter(Boolean)
+      )].slice(0, MAX_GENERATED_PROMPTS)
     : [];
 
   if (generatedPrompts.length === 0) {

@@ -6,6 +6,21 @@ export interface DomainResearch {
   prompts: string[];
 }
 
+const MAX_GENERATED_PROMPTS = 5;
+
+function normalizePrompts(prompts: unknown): string[] {
+  if (!Array.isArray(prompts)) {
+    return [];
+  }
+
+  return [...new Set(
+    prompts
+      .filter((prompt): prompt is string => typeof prompt === "string")
+      .map((prompt) => prompt.trim())
+      .filter(Boolean)
+  )].slice(0, MAX_GENERATED_PROMPTS);
+}
+
 function fallbackResearch(domain: string): DomainResearch {
   return {
     targetAudience: "General audience",
@@ -14,6 +29,8 @@ function fallbackResearch(domain: string): DomainResearch {
       `What is the best tool for ${domain}?`,
       `Recommend a service similar to ${domain}`,
       `How to find services like ${domain}`,
+      `What are the top alternatives to ${domain}?`,
+      `Which companies offer services like ${domain}?`,
     ],
   };
 }
@@ -41,12 +58,7 @@ function normalizeResearch(domain: string, value: unknown): DomainResearch {
   }
 
   const record = value as Record<string, unknown>;
-  const prompts = Array.isArray(record.prompts)
-    ? record.prompts
-        .filter((prompt): prompt is string => typeof prompt === "string")
-        .map((prompt) => prompt.trim())
-        .filter(Boolean)
-    : [];
+  const prompts = normalizePrompts(record.prompts);
 
   return {
     targetAudience:

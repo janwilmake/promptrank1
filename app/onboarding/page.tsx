@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 
+const ONBOARDING_LOCK_KEY = "onboarding_setup_lock";
+
 export default function OnboardingPage() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
@@ -27,6 +29,13 @@ export default function OnboardingPage() {
         return;
       }
 
+      const lockValue = sessionStorage.getItem(ONBOARDING_LOCK_KEY);
+      if (lockValue === domain) {
+        return;
+      }
+
+      sessionStorage.setItem(ONBOARDING_LOCK_KEY, domain);
+
       try {
         setStatus("Creating your site…");
         const siteRes = await fetch("/api/sites", {
@@ -46,10 +55,12 @@ export default function OnboardingPage() {
         });
 
         sessionStorage.removeItem("pending_domain");
+        sessionStorage.removeItem(ONBOARDING_LOCK_KEY);
         setStatus("Almost done — testing your prompts…");
 
         router.push(`/dashboard?siteId=${site.id}&new=true`);
       } catch {
+        sessionStorage.removeItem(ONBOARDING_LOCK_KEY);
         setStatus("Something went wrong. Redirecting to dashboard…");
         setTimeout(() => router.push("/dashboard"), 2000);
       }
