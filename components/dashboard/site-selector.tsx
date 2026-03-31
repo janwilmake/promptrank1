@@ -1,0 +1,108 @@
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
+interface Site {
+  id: string;
+  domain: string;
+  last_checked: string | null;
+}
+
+interface Props {
+  sites: Site[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onSiteAdded: (site: Site) => void;
+}
+
+export function SiteSelector({ sites, selectedId, onSelect, onSiteAdded }: Props) {
+  const [open, setOpen] = useState(false);
+  const [domain, setDomain] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/sites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Failed to add site");
+      }
+
+      const site = await res.json();
+
+      // Kick off agent research
+      fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: site.domain, siteId: site.id }),
+      });
+
+      onSiteAdded(site);
+      setDomain("");
+      setOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {sites.map((site) => (
+        <Button
+          key={site.id}
+          variant={selectedId === site.id ? "default" : "outline"}
+          size="sm"
+          onClick={() => onSelect(site.id)}
+        >
+          {site.domain}
+        </Button>
+      ))}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger
+          className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground"
+        >
+          + Add site
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add a new site</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAdd} className="space-y-4">
+            <Input
+              placeholder="yourdomain.com"
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              disabled={loading}
+            />
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <Button type="submit" disabled={loading || !domain.trim()} className="w-full">
+              {loading ? "Adding…" : "Add site"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
