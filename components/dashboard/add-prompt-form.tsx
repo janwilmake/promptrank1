@@ -43,11 +43,14 @@ export function AddPromptForm({ siteId, domain, onChanged }: Props) {
     setStatus("Generating prompt suggestions…");
 
     try {
-      await fetch("/api/agent", {
+      const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ domain, siteId }),
       });
+      if (!res.ok) {
+        throw new Error("Failed to generate suggestions");
+      }
       setStatus("New prompts generated and queued for testing.");
       onChanged?.();
     } catch {

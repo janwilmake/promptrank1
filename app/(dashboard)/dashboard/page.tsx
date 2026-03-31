@@ -185,19 +185,6 @@ function DashboardContent() {
                 }
               />
 
-              <CompetitorsOverview
-                prompts={prompts}
-                loading={promptsLoading}
-              />
-
-              <RankingWebsitesOverview
-                prompts={prompts}
-                domain={selectedSite.domain}
-                loading={promptsLoading}
-              />
-            </div>
-
-            <div className="mt-6">
               <AddPromptForm
                 siteId={selectedSite.id}
                 domain={selectedSite.domain}
@@ -212,6 +199,17 @@ function DashboardContent() {
                       setPromptsLoading(false);
                     });
                 }}
+              />
+
+              <CompetitorsOverview
+                prompts={prompts}
+                loading={promptsLoading}
+              />
+
+              <RankingWebsitesOverview
+                prompts={prompts}
+                domain={selectedSite.domain}
+                loading={promptsLoading}
               />
             </div>
           </>

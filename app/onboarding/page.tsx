@@ -48,11 +48,12 @@ export default function OnboardingPage() {
         const site = await siteRes.json();
 
         setStatus("Researching your domain and generating prompts…");
-        await fetch("/api/agent", {
+        const agentRes = await fetch("/api/agent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ domain, siteId: site.id }),
         });
+        if (!agentRes.ok) throw new Error("Failed to generate prompts");
 
         sessionStorage.removeItem("pending_domain");
         sessionStorage.removeItem(ONBOARDING_LOCK_KEY);
