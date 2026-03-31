@@ -3,10 +3,8 @@ import { Pool } from "pg";
 
 export const auth = betterAuth({
   database: new Pool({
-    connectionString: `${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(
-      "https://",
-      "postgresql://postgres:"
-    )}${process.env.SUPABASE_SERVICE_ROLE_KEY}@db.${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace("https://", "").replace(".supabase.co", "")}.supabase.co:5432/postgres`,
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
   }),
   secret: process.env.BETTER_AUTH_SECRET!,
   baseURL: process.env.BETTER_AUTH_URL!,

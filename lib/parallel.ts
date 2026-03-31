@@ -9,15 +9,22 @@ export interface DomainResearch {
 export async function researchDomainAndGeneratePrompts(
   domain: string
 ): Promise<DomainResearch> {
-  const res = await fetch("https://api.parallel.ai/v1/search", {
+  const res = await fetch("https://api.parallel.ai/v1beta/search", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.PARALLEL_API_KEY}`,
+      "x-api-key": process.env.PARALLEL_API_KEY ?? "",
       "Content-Type": "application/json",
+      "parallel-beta": "search-extract-2025-10-10",
     },
     body: JSON.stringify({
-      query: `Research the website ${domain}. What does it offer? Who is the target audience? What specific problems do they solve? What would their ideal customers search for in AI assistants like ChatGPT, Claude, Gemini, or Perplexity?`,
-      search_depth: "deep",
+      objective: `Research the website ${domain}. What does it offer? Who is the target audience? What specific problems do they solve? What would their ideal customers search for in AI assistants like ChatGPT, Claude, Gemini, or Perplexity?`,
+      search_queries: [
+        `${domain} what is it about`,
+        `${domain} target audience customers`,
+        `${domain} products services features`,
+      ],
+      max_results: 10,
+      excerpts: { max_chars_per_result: 5000 },
     }),
   });
 
@@ -27,7 +34,11 @@ export async function researchDomainAndGeneratePrompts(
   }
 
   const data = await res.json();
-  const researchText: string = data.result ?? data.answer ?? JSON.stringify(data);
+  const researchText: string = (data.results ?? [])
+    .map((r: { url: string; title: string; excerpts?: string[] }) =>
+      `${r.title} (${r.url}):\n${(r.excerpts ?? []).join("\n")}`
+    )
+    .join("\n\n") || JSON.stringify(data);
 
   // Use OpenRouter to synthesize prompts from the research
   const synthesisRes = await fetch(
