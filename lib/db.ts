@@ -96,6 +96,7 @@ export type Database = {
           response: string;
           mentions_domain: boolean;
           rank: number | null;
+          competitor_domains: string[];
           checked_at: string;
         };
         Insert: {
@@ -105,6 +106,7 @@ export type Database = {
           response: string;
           mentions_domain: boolean;
           rank?: number | null;
+          competitor_domains?: string[];
           checked_at: string;
         };
         Update: {
@@ -114,6 +116,7 @@ export type Database = {
           response?: string;
           mentions_domain?: boolean;
           rank?: number | null;
+          competitor_domains?: string[];
           checked_at?: string;
         };
         Relationships: [

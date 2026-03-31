@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 interface Props {
   siteId: string;
   domain: string;
+  onChanged?: () => void;
 }
 
-export function AddPromptForm({ siteId, domain }: Props) {
+export function AddPromptForm({ siteId, domain, onChanged }: Props) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -30,6 +31,7 @@ export function AddPromptForm({ siteId, domain }: Props) {
       if (res.ok) {
         setText("");
         setStatus("Prompt added — testing in progress.");
+        onChanged?.();
       }
     } finally {
       setLoading(false);
@@ -47,6 +49,7 @@ export function AddPromptForm({ siteId, domain }: Props) {
         body: JSON.stringify({ domain, siteId }),
       });
       setStatus("New prompts generated and queued for testing.");
+      onChanged?.();
     } catch {
       setStatus("Failed to generate suggestions.");
     } finally {

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "migrate": "supabase db push",
+    "reset:onboarding": "node scripts/reset-onboarding.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

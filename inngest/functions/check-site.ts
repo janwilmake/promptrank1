@@ -2,6 +2,7 @@ import { inngest } from "../client";
 import { adminDb } from "@/lib/db";
 import { testPromptAllProviders } from "@/lib/openrouter";
 import { sendResultsEmail } from "@/lib/email";
+import { logError, logInfo } from "@/lib/log";
 
 type CheckSiteData = {
   siteId: string;
@@ -18,64 +19,116 @@ export const checkSite = inngest.createFunction(
     retries: 2,
     triggers: [{ event: "site/check" as const }],
   },
-  async ({ event, step }) => {
+  async ({ event, step, runId, attempt }) => {
     const { siteId, domain, userEmail } = event.data as CheckSiteData;
 
-    const prompts = await step.run("fetch-prompts", async () => {
-      const { data, error } = await adminDb
-        .from("prompts")
-        .select("id, text")
-        .eq("site_id", siteId);
+    try {
+      logInfo("inngest", "check-site started", {
+        runId,
+        attempt,
+        eventId: event.id,
+        siteId,
+        domain,
+        userEmail,
+      });
 
-      if (error) throw new Error(error.message);
-      return data ?? [];
-    });
+      const prompts = await step.run("fetch-prompts", async () => {
+        const { data, error } = await adminDb
+          .from("prompts")
+          .select("id, text")
+          .eq("site_id", siteId);
 
-    if (prompts.length === 0) return { skipped: true, reason: "no prompts" };
+        if (error) throw new Error(error.message);
+        return data ?? [];
+      });
 
-    const allSummaries = await step.run("test-all-prompts", async () => {
-      const results = await Promise.all(
-        prompts.map(async (prompt: { id: string; text: string }) => {
-          const providerResults = await testPromptAllProviders(prompt.text, domain);
+      logInfo("inngest", "Fetched prompts for check-site", {
+        runId,
+        siteId,
+        domain,
+        promptCount: prompts.length,
+      });
 
-          if (providerResults.length > 0) {
-            await adminDb.from("prompt_results").insert(
-              providerResults.map((r) => ({
-                prompt_id: prompt.id,
+      if (prompts.length === 0) {
+        logInfo("inngest", "check-site skipped because no prompts exist", {
+          runId,
+          siteId,
+          domain,
+        });
+        return { skipped: true, reason: "no prompts" };
+      }
+
+      const allSummaries = await step.run("test-all-prompts", async () => {
+        const results = await Promise.all(
+          prompts.map(async (prompt: { id: string; text: string }) => {
+            const providerResults = await testPromptAllProviders(prompt.text, domain);
+
+            if (providerResults.length > 0) {
+              await adminDb.from("prompt_results").insert(
+                providerResults.map((r) => ({
+                  prompt_id: prompt.id,
                 provider: r.provider,
                 response: r.response,
                 mentions_domain: r.mentions_domain,
                 rank: r.rank,
+                competitor_domains: r.competitor_domains,
                 checked_at: new Date().toISOString(),
               }))
             );
-          }
+            }
 
-          return {
-            prompt: prompt.text,
-            results: providerResults.map((r) => ({
+            return {
+              prompt: prompt.text,
+              results: providerResults.map((r) => ({
               provider: r.provider,
               mentions_domain: r.mentions_domain,
               rank: r.rank,
+              competitor_domains: r.competitor_domains,
             })),
           };
         })
-      );
-      return results;
-    });
+        );
+        return results;
+      });
 
-    await step.run("update-last-checked", async () => {
-      await adminDb
-        .from("sites")
-        .update({ last_checked: new Date().toISOString() })
-        .eq("id", siteId);
-    });
+      logInfo("inngest", "Completed provider checks for site", {
+        runId,
+        siteId,
+        domain,
+        promptCount: prompts.length,
+        providerResultCount: allSummaries.reduce((count, summary) => count + summary.results.length, 0),
+      });
 
-    await step.run("send-email", async () => {
-      await sendResultsEmail(userEmail, domain, allSummaries);
-    });
+      await step.run("update-last-checked", async () => {
+        await adminDb
+          .from("sites")
+          .update({ last_checked: new Date().toISOString() })
+          .eq("id", siteId);
+      });
 
-    return { siteId, promptsChecked: prompts.length };
+      await step.run("send-email", async () => {
+        await sendResultsEmail(userEmail, domain, allSummaries);
+      });
+
+      logInfo("inngest", "check-site finished", {
+        runId,
+        siteId,
+        domain,
+        promptCount: prompts.length,
+        emailed: true,
+      });
+
+      return { siteId, promptsChecked: prompts.length };
+    } catch (error) {
+      logError("inngest", "check-site failed", {
+        runId,
+        siteId,
+        domain,
+        attempt,
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
+      throw error;
+    }
   }
 );
 
@@ -86,34 +139,59 @@ export const weeklyCronJob = inngest.createFunction(
     name: "Weekly Prompt Check Cron",
     triggers: [{ cron: "0 * * * *" }],
   },
-  async ({ step }) => {
-    const sites = await step.run("find-stale-sites", async () => {
-      const sevenDaysAgo = new Date(
-        Date.now() - 7 * 24 * 60 * 60 * 1000
-      ).toISOString();
-
-      const { data, error } = await adminDb.rpc("get_stale_paid_sites", {
-        cutoff: sevenDaysAgo,
+  async ({ step, runId, attempt }) => {
+    try {
+      logInfo("inngest", "weekly-check-cron started", {
+        runId,
+        attempt,
       });
 
-      if (error) throw new Error(error.message);
-      return (data ?? []) as { site_id: string; domain: string; email: string }[];
-    });
+      const sites = await step.run("find-stale-sites", async () => {
+        const sevenDaysAgo = new Date(
+          Date.now() - 7 * 24 * 60 * 60 * 1000
+        ).toISOString();
 
-    if (sites.length === 0) return { enqueued: 0 };
+        const { data, error } = await adminDb.rpc("get_stale_paid_sites", {
+          cutoff: sevenDaysAgo,
+        });
 
-    await step.sendEvent(
-      "enqueue-sites",
-      sites.map((s: { site_id: string; domain: string; email: string }) => ({
-        name: "site/check" as const,
-        data: {
-          siteId: s.site_id,
-          domain: s.domain,
-          userEmail: s.email,
-        } satisfies CheckSiteData,
-      }))
-    );
+        if (error) throw new Error(error.message);
+        return (data ?? []) as { site_id: string; domain: string; email: string }[];
+      });
 
-    return { enqueued: sites.length };
+      if (sites.length === 0) {
+        logInfo("inngest", "weekly-check-cron found no stale sites", {
+          runId,
+        });
+        return { enqueued: 0 };
+      }
+
+      await step.sendEvent(
+        "enqueue-sites",
+        sites.map((s: { site_id: string; domain: string; email: string }) => ({
+          name: "site/check" as const,
+          data: {
+            siteId: s.site_id,
+            domain: s.domain,
+            userEmail: s.email,
+          } satisfies CheckSiteData,
+        }))
+      );
+
+      logInfo("inngest", "weekly-check-cron enqueued stale sites", {
+        runId,
+        siteCount: sites.length,
+        siteIds: sites.map((site) => site.site_id),
+      });
+
+      return { enqueued: sites.length };
+    } catch (error) {
+      logError("inngest", "weekly-check-cron failed", {
+        runId,
+        attempt,
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
+      throw error;
+    }
   }
 );

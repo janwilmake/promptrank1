@@ -6,6 +6,61 @@ export interface DomainResearch {
   prompts: string[];
 }
 
+function fallbackResearch(domain: string): DomainResearch {
+  return {
+    targetAudience: "General audience",
+    niche: domain,
+    prompts: [
+      `What is the best tool for ${domain}?`,
+      `Recommend a service similar to ${domain}`,
+      `How to find services like ${domain}`,
+    ],
+  };
+}
+
+function extractJsonObject(text: string) {
+  const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim();
+  }
+
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    return text.slice(firstBrace, lastBrace + 1);
+  }
+
+  return text.trim();
+}
+
+function normalizeResearch(domain: string, value: unknown): DomainResearch {
+  const fallback = fallbackResearch(domain);
+
+  if (!value || typeof value !== "object") {
+    return fallback;
+  }
+
+  const record = value as Record<string, unknown>;
+  const prompts = Array.isArray(record.prompts)
+    ? record.prompts
+        .filter((prompt): prompt is string => typeof prompt === "string")
+        .map((prompt) => prompt.trim())
+        .filter(Boolean)
+    : [];
+
+  return {
+    targetAudience:
+      typeof record.targetAudience === "string" && record.targetAudience.trim()
+        ? record.targetAudience.trim()
+        : fallback.targetAudience,
+    niche:
+      typeof record.niche === "string" && record.niche.trim()
+        ? record.niche.trim()
+        : fallback.niche,
+    prompts: prompts.length > 0 ? prompts : fallback.prompts,
+  };
+}
+
 export async function researchDomainAndGeneratePrompts(
   domain: string
 ): Promise<DomainResearch> {
@@ -52,12 +107,12 @@ export async function researchDomainAndGeneratePrompts(
         "X-Title": "PromptRank1",
       },
       body: JSON.stringify({
-        model: "anthropic/claude-3.5-sonnet",
+        model: "anthropic/claude-sonnet-4.6",
         messages: [
           {
             role: "user",
             content: `Based on this research about ${domain}:\n\n${researchText}\n\n
-Generate 8-10 realistic search prompts that the target audience would type into an AI assistant (ChatGPT, Claude, Gemini, Perplexity) when looking for products or services like those offered by ${domain}.
+Generate exactly 5 realistic search prompts that the target audience would type into an AI assistant (ChatGPT, Claude, Gemini, Perplexity) when looking for products or services like those offered by ${domain}.
 
 Return a JSON object with this exact structure:
 {
@@ -78,21 +133,17 @@ Return only valid JSON, no markdown.`,
     }
   );
 
+  if (!synthesisRes.ok) {
+    const text = await synthesisRes.text();
+    throw new Error(`OpenRouter synthesis error: ${text}`);
+  }
+
   const synthesisData = await synthesisRes.json();
   const content = synthesisData.choices?.[0]?.message?.content ?? "{}";
 
   try {
-    return JSON.parse(content) as DomainResearch;
+    return normalizeResearch(domain, JSON.parse(extractJsonObject(content)));
   } catch {
-    // Fallback if parsing fails
-    return {
-      targetAudience: "General audience",
-      niche: domain,
-      prompts: [
-        `What is the best tool for ${domain}?`,
-        `Recommend a service similar to ${domain}`,
-        `How to find services like ${domain}`,
-      ],
-    };
+    return fallbackResearch(domain);
   }
 }

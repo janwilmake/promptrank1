@@ -7,8 +7,10 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { CompetitorsOverview } from "@/components/dashboard/competitors-overview";
+import { RankingWebsitesOverview } from "@/components/dashboard/ranking-websites-overview";
 import { SiteSelector } from "@/components/dashboard/site-selector";
-import { PromptsTable } from "@/components/dashboard/prompts-table";
+import { Prompt, PromptsTable } from "@/components/dashboard/prompts-table";
 import { AddPromptForm } from "@/components/dashboard/add-prompt-form";
 import { PaywallBanner } from "@/components/dashboard/paywall-banner";
 
@@ -34,6 +36,10 @@ function DashboardContent() {
   );
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
+  const [prompts, setPrompts] = useState<Prompt[]>([]);
+  const [promptsLoading, setPromptsLoading] = useState(
+    Boolean(searchParams.get("siteId"))
+  );
   const [isNew] = useState(searchParams.get("new") === "true");
 
   useEffect(() => {
@@ -56,6 +62,7 @@ function DashboardContent() {
       setSubscription(subData);
 
       if (!selectedSiteId && sitesData.length > 0) {
+        setPromptsLoading(true);
         setSelectedSiteId(sitesData[0].id);
       }
 
@@ -64,6 +71,31 @@ function DashboardContent() {
 
     load();
   }, [session, isPending, router, selectedSiteId]);
+
+  useEffect(() => {
+    if (!selectedSiteId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    fetch(`/api/sites/${selectedSiteId}/prompts`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (!cancelled) {
+          setPrompts(Array.isArray(data) ? data : []);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPromptsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSiteId]);
 
   if (isPending || loading) {
     return (
@@ -103,7 +135,7 @@ function DashboardContent() {
 
         {isNew && (
           <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-            Your prompts are being tested now — results will appear below and we'll email you when done.
+            Your prompts are being tested now — results will appear below and we&apos;ll email you when done.
           </div>
         )}
 
@@ -112,9 +144,13 @@ function DashboardContent() {
           <SiteSelector
             sites={sites}
             selectedId={selectedSiteId}
-            onSelect={setSelectedSiteId}
+            onSelect={(siteId) => {
+              setPromptsLoading(true);
+              setSelectedSiteId(siteId);
+            }}
             onSiteAdded={(site) => {
               setSites((prev) => [site, ...prev]);
+              setPromptsLoading(true);
               setSelectedSiteId(site.id);
             }}
           />
@@ -138,10 +174,45 @@ function DashboardContent() {
 
             <Separator className="mb-6" />
 
-            <PromptsTable siteId={selectedSite.id} domain={selectedSite.domain} />
+            <div className="space-y-6">
+              <PromptsTable
+                siteId={selectedSite.id}
+                prompts={prompts}
+                domain={selectedSite.domain}
+                loading={promptsLoading}
+                onPromptDeleted={(promptId) =>
+                  setPrompts((prev) => prev.filter((prompt) => prompt.id !== promptId))
+                }
+              />
+
+              <CompetitorsOverview
+                prompts={prompts}
+                loading={promptsLoading}
+              />
+
+              <RankingWebsitesOverview
+                prompts={prompts}
+                domain={selectedSite.domain}
+                loading={promptsLoading}
+              />
+            </div>
 
             <div className="mt-6">
-              <AddPromptForm siteId={selectedSite.id} domain={selectedSite.domain} />
+              <AddPromptForm
+                siteId={selectedSite.id}
+                domain={selectedSite.domain}
+                onChanged={() => {
+                  setPromptsLoading(true);
+                  fetch(`/api/sites/${selectedSite.id}/prompts`)
+                    .then((response) => response.json())
+                    .then((data) => {
+                      setPrompts(Array.isArray(data) ? data : []);
+                    })
+                    .finally(() => {
+                      setPromptsLoading(false);
+                    });
+                }}
+              />
             </div>
           </>
         )}

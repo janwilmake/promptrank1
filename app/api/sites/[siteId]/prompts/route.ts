@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { adminDb } from "@/lib/db";
 import { inngest } from "@/inngest/client";
+import { logError, logInfo } from "@/lib/log";
 
 export async function GET(
   _req: NextRequest,
@@ -28,7 +29,7 @@ export async function GET(
     .select(`
       id, text, created_at,
       prompt_results (
-        id, provider, mentions_domain, rank, checked_at
+        id, provider, response, mentions_domain, rank, competitor_domains, checked_at
       )
     `)
     .eq("site_id", siteId)
@@ -67,14 +68,33 @@ export async function POST(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Immediately test the new prompt
-  await inngest.send({
-    name: "site/check",
-    data: {
+  try {
+    const eventResult = await inngest.send({
+      name: "site/check",
+      data: {
+        siteId,
+        domain: site.domain,
+        userEmail: session.user.email,
+      },
+    });
+
+    logInfo("onboarding", "Queued site/check event for manually added prompt", {
       siteId,
+      promptId: prompt.id,
+      domain: site.domain,
+      eventIds: eventResult.ids,
+      userEmail: session.user.email,
+    });
+  } catch (sendError) {
+    logError("onboarding", "Failed to queue site/check event for manually added prompt", {
+      siteId,
+      promptId: prompt.id,
       domain: site.domain,
       userEmail: session.user.email,
-    },
-  });
+      error: sendError instanceof Error ? sendError : new Error(String(sendError)),
+    });
+    throw sendError;
+  }
 
   return NextResponse.json(prompt, { status: 201 });
 }

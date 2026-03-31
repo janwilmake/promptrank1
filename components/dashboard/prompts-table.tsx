@@ -1,19 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  extractDomainsFromText,
+  isLikelyProviderError,
+  normalizeComparableDomain,
+} from "@/lib/competitors";
 import { PROVIDERS } from "@/lib/openrouter";
 
-interface PromptResult {
+export interface PromptResult {
   id: string;
   provider: string;
+  response: string;
   mentions_domain: boolean;
   rank: number | null;
+  competitor_domains: string[];
   checked_at: string;
 }
 
-interface Prompt {
+export interface Prompt {
   id: string;
   text: string;
   created_at: string;
@@ -22,7 +29,10 @@ interface Prompt {
 
 interface Props {
   siteId: string;
+  prompts: Prompt[];
   domain: string;
+  loading?: boolean;
+  onPromptDeleted?: (promptId: string) => void;
 }
 
 // Get the latest result per provider for a prompt
@@ -36,26 +46,101 @@ function latestResults(results: PromptResult[]): Record<string, PromptResult> {
   return map;
 }
 
-export function PromptsTable({ siteId, domain }: Props) {
-  const [prompts, setPrompts] = useState<Prompt[]>([]);
-  const [loading, setLoading] = useState(true);
+function getProviderError(response: string) {
+  return response.replace(/^\[provider-error\]\s*/, "");
+}
 
-  useEffect(() => {
-    fetch(`/api/sites/${siteId}/prompts`)
-      .then((r) => r.json())
-      .then((data) => {
-        setPrompts(Array.isArray(data) ? data : []);
-        setLoading(false);
-      });
-  }, [siteId]);
+function getCompetitors(response: string, domain: string) {
+  return extractDomainsFromText(response, [normalizeComparableDomain(domain)]);
+}
 
+function getRankBadgeClass(rank: number | null) {
+  if (rank === 1) {
+    return "cursor-help bg-green-100 text-green-700 hover:bg-green-100";
+  }
+
+  if (typeof rank === "number") {
+    return "cursor-help bg-orange-100 text-orange-700 hover:bg-orange-100";
+  }
+
+  return "cursor-help bg-green-100 text-green-700 hover:bg-green-100";
+}
+
+function CompetitorHoverCard({
+  result,
+  domain,
+}: {
+  result: PromptResult;
+  domain: string;
+}) {
+  const competitors = getCompetitors(result.response, domain);
+  const providerError = isLikelyProviderError(result.response);
+  const providerErrorMessage = providerError ? getProviderError(result.response) : null;
+
+  return (
+    <div className="group relative inline-flex">
+      {providerError ? (
+        <Badge className="cursor-help bg-amber-100 text-amber-800 hover:bg-amber-100">!</Badge>
+      ) : result.mentions_domain ? (
+        <Badge className={getRankBadgeClass(result.rank)}>
+          #{result.rank ?? "✓"}
+        </Badge>
+      ) : (
+        <Badge variant="outline" className="cursor-help text-neutral-400">
+          ✗
+        </Badge>
+      )}
+
+      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-72 -translate-x-1/2 rounded-2xl border border-neutral-200 bg-white p-3 text-left shadow-xl group-hover:block">
+        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">
+          {providerError ? "Provider Error" : "Ranking Websites"}
+        </div>
+
+        {providerError ? (
+          <p className="mt-2 text-xs leading-5 text-neutral-700">{providerErrorMessage}</p>
+        ) : competitors.length > 0 ? (
+          <div className="mt-3 space-y-2">
+            {competitors.map((competitor) => (
+              <div
+                key={competitor}
+                className="flex items-center gap-2 rounded-xl border border-neutral-100 px-2 py-1.5"
+              >
+                <Image
+                  src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(competitor)}&sz=32`}
+                  alt=""
+                  width={16}
+                  height={16}
+                  className="h-4 w-4 rounded-sm"
+                  unoptimized
+                />
+                <span className="truncate text-xs text-neutral-700">{competitor}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-xs leading-5 text-neutral-600">
+            No ranking websites were detected in the stored provider response.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function PromptsTable({
+  siteId,
+  prompts,
+  domain,
+  loading = false,
+  onPromptDeleted,
+}: Props) {
   async function handleDelete(promptId: string) {
     await fetch(`/api/sites/${siteId}/prompts`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ promptId }),
     });
-    setPrompts((prev) => prev.filter((p) => p.id !== promptId));
+    onPromptDeleted?.(promptId);
   }
 
   if (loading) {
@@ -69,10 +154,6 @@ export function PromptsTable({ siteId, domain }: Props) {
       </div>
     );
   }
-
-  const providerNames: Record<string, string> = Object.fromEntries(
-    PROVIDERS.map((p) => [p.id, p.name])
-  );
 
   return (
     <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-white">
@@ -109,15 +190,7 @@ export function PromptsTable({ siteId, domain }: Props) {
                   }
                   return (
                     <td key={p.id} className="px-3 py-3 text-center">
-                      {result.mentions_domain ? (
-                        <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-                          #{result.rank ?? "✓"}
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-neutral-400">
-                          ✗
-                        </Badge>
-                      )}
+                      <CompetitorHoverCard result={result} domain={domain} />
                     </td>
                   );
                 })}
