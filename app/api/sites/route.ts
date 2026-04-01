@@ -32,6 +32,48 @@ export async function POST(req: NextRequest) {
     .replace(/^www\./, "")
     .replace(/\/$/, "");
 
+  const { data: existingSite, error: existingSiteLookupError } = await adminDb
+    .from("sites")
+    .select("id, domain, created_at, last_checked, initial_prompt_generation_status, initial_prompt_generation_error")
+    .eq("user_id", session.user.id)
+    .eq("domain", normalizedDomain)
+    .single();
+
+  if (!existingSiteLookupError && existingSite) {
+    logInfo("onboarding", "Reusing existing site", {
+      siteId: existingSite.id,
+      domain: existingSite.domain,
+      userId: session.user.id,
+      userEmail: session.user.email,
+    });
+    return NextResponse.json({ ...existingSite, existing: true });
+  }
+
+  const [{ count: existingSiteCount }, { data: subscription }] = await Promise.all([
+    adminDb
+      .from("sites")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", session.user.id),
+    adminDb
+      .from("subscriptions")
+      .select("status")
+      .eq("user_id", session.user.id)
+      .eq("status", "active")
+      .maybeSingle(),
+  ]);
+
+  const isPaid = subscription?.status === "active";
+
+  if (!isPaid && (existingSiteCount ?? 0) >= 1) {
+    return NextResponse.json(
+      {
+        error: "Free accounts can only add one website. Upgrade to premium to track more sites.",
+        code: "free_plan_site_limit",
+      },
+      { status: 402 }
+    );
+  }
+
   const { data, error } = await adminDb
     .from("sites")
     .insert({ user_id: session.user.id, domain: normalizedDomain })
@@ -39,25 +81,6 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) {
-    if (error.code === "23505") {
-      const { data: existingSite, error: existingSiteError } = await adminDb
-        .from("sites")
-        .select("id, domain, created_at, last_checked, initial_prompt_generation_status, initial_prompt_generation_error")
-        .eq("user_id", session.user.id)
-        .eq("domain", normalizedDomain)
-        .single();
-
-      if (!existingSiteError && existingSite) {
-        logInfo("onboarding", "Reusing existing site", {
-          siteId: existingSite.id,
-          domain: existingSite.domain,
-          userId: session.user.id,
-          userEmail: session.user.email,
-        });
-        return NextResponse.json({ ...existingSite, existing: true });
-      }
-    }
-
     logError("onboarding", "Failed to create site", {
       domain: normalizedDomain,
       userId: session.user.id,

@@ -292,10 +292,11 @@ export async function POST(req: NextRequest) {
           siteId,
           domain,
           userEmail: session.user.email,
+          promptIds: prompts.map((prompt) => prompt.id),
         },
       });
 
-      logInfo("onboarding", "Queued site/check event after prompt generation", {
+      logInfo("onboarding", "Queued prompt-level site/check event after prompt generation", {
         domain,
         siteId,
         mode: generationMode,
@@ -303,7 +304,7 @@ export async function POST(req: NextRequest) {
         userEmail: session.user.email,
       });
     } catch (error) {
-      logError("onboarding", "Failed to queue site/check event after prompt generation", {
+      logError("onboarding", "Failed to queue prompt-level site/check event after prompt generation", {
         domain,
         siteId,
         mode: generationMode,

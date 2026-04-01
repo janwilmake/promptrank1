@@ -94,10 +94,88 @@ export type Database = {
           }
         ];
       };
+      site_check_runs: {
+        Row: {
+          id: string;
+          site_id: string;
+          domain: string;
+          user_email: string;
+          total_prompts: number;
+          created_at: string;
+          finished_at: string | null;
+          email_sent_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          site_id: string;
+          domain: string;
+          user_email: string;
+          total_prompts: number;
+          created_at?: string;
+          finished_at?: string | null;
+          email_sent_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          site_id?: string;
+          domain?: string;
+          user_email?: string;
+          total_prompts?: number;
+          created_at?: string;
+          finished_at?: string | null;
+          email_sent_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "site_check_runs_site_id_fkey";
+            columns: ["site_id"];
+            referencedRelation: "sites";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      site_check_run_prompts: {
+        Row: {
+          site_check_run_id: string;
+          prompt_id: string;
+          prompt_text: string;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          site_check_run_id: string;
+          prompt_id: string;
+          prompt_text: string;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          site_check_run_id?: string;
+          prompt_id?: string;
+          prompt_text?: string;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "site_check_run_prompts_site_check_run_id_fkey";
+            columns: ["site_check_run_id"];
+            referencedRelation: "site_check_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "site_check_run_prompts_prompt_id_fkey";
+            columns: ["prompt_id"];
+            referencedRelation: "prompts";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       prompt_results: {
         Row: {
           id: string;
           prompt_id: string;
+          check_run_id: string | null;
           provider: string;
           response: string;
           mentions_domain: boolean;
@@ -108,6 +186,7 @@ export type Database = {
         Insert: {
           id?: string;
           prompt_id: string;
+          check_run_id?: string | null;
           provider: string;
           response: string;
           mentions_domain: boolean;
@@ -118,6 +197,7 @@ export type Database = {
         Update: {
           id?: string;
           prompt_id?: string;
+          check_run_id?: string | null;
           provider?: string;
           response?: string;
           mentions_domain?: boolean;
@@ -130,6 +210,12 @@ export type Database = {
             foreignKeyName: "prompt_results_prompt_id_fkey";
             columns: ["prompt_id"];
             referencedRelation: "prompts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "prompt_results_check_run_id_fkey";
+            columns: ["check_run_id"];
+            referencedRelation: "site_check_runs";
             referencedColumns: ["id"];
           }
         ];

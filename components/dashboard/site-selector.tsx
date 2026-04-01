@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { UpgradeRequiredDialog } from "@/components/upgrade-required-dialog";
 import {
   Dialog,
   DialogContent,
@@ -22,12 +23,14 @@ interface Site {
 interface Props {
   sites: Site[];
   selectedId: string | null;
+  isPaid: boolean;
   onSelect: (id: string) => void;
   onSiteAdded: (site: Site) => void;
 }
 
-export function SiteSelector({ sites, selectedId, onSelect, onSiteAdded }: Props) {
+export function SiteSelector({ sites, selectedId, isPaid, onSelect, onSiteAdded }: Props) {
   const [open, setOpen] = useState(false);
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const [domain, setDomain] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -45,8 +48,13 @@ export function SiteSelector({ sites, selectedId, onSelect, onSiteAdded }: Props
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? "Failed to add site");
+        const data = await res.json().catch(() => null);
+        if (data?.code === "free_plan_site_limit") {
+          setOpen(false);
+          setShowUpgradeDialog(true);
+          return;
+        }
+        throw new Error(data?.error ?? "Failed to add site");
       }
 
       const site = await res.json();
@@ -87,6 +95,24 @@ export function SiteSelector({ sites, selectedId, onSelect, onSiteAdded }: Props
         </Button>
       ))}
 
+      {!isPaid ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowUpgradeDialog(true)}
+            className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium text-neutral-500 opacity-70 shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+            aria-disabled="true"
+          >
+            + Add site
+          </button>
+          <UpgradeRequiredDialog
+            open={showUpgradeDialog}
+            onOpenChange={setShowUpgradeDialog}
+            title="Premium required for another website"
+            description="Free accounts can track one website. Go back to your dashboard or upgrade to premium to add another site."
+          />
+        </>
+      ) : (
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger
           className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground"
@@ -111,6 +137,7 @@ export function SiteSelector({ sites, selectedId, onSelect, onSiteAdded }: Props
           </form>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }

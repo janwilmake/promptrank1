@@ -3,18 +3,21 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { UpgradeRequiredDialog } from "@/components/upgrade-required-dialog";
 
 interface Props {
   siteId: string;
   domain: string;
+  isPaid: boolean;
   onChanged?: () => void;
 }
 
-export function AddPromptForm({ siteId, domain, onChanged }: Props) {
+export function AddPromptForm({ siteId, domain, isPaid, onChanged }: Props) {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [status, setStatus] = useState("");
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -39,6 +42,11 @@ export function AddPromptForm({ siteId, domain, onChanged }: Props) {
   }
 
   async function handleGenerate() {
+    if (!isPaid) {
+      setShowUpgradeDialog(true);
+      return;
+    }
+
     setGenerating(true);
     setStatus("Generating prompt suggestions…");
 
@@ -84,11 +92,20 @@ export function AddPromptForm({ siteId, domain, onChanged }: Props) {
           size="sm"
           onClick={handleGenerate}
           disabled={generating}
+          className={!isPaid ? "cursor-pointer text-neutral-500 opacity-70" : undefined}
+          aria-disabled={!isPaid}
         >
           {generating ? "Generating…" : "Generate suggestions"}
         </Button>
         {status && <span className="text-sm text-neutral-500">{status}</span>}
       </div>
+
+      <UpgradeRequiredDialog
+        open={showUpgradeDialog}
+        onOpenChange={setShowUpgradeDialog}
+        title="Premium required for suggestions"
+        description="Prompt suggestions are available on premium. Go back to your dashboard or upgrade to premium to generate more suggestions."
+      />
     </div>
   );
 }

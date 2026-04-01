@@ -188,6 +188,7 @@ function DashboardContent() {
           <SiteSelector
             sites={sites}
             selectedId={selectedSiteId}
+            isPaid={isPaid}
             onSelect={(siteId) => {
               setPromptsLoading(true);
               setSelectedSiteId(siteId);
@@ -256,6 +257,7 @@ function DashboardContent() {
               <AddPromptForm
                 siteId={selectedSite.id}
                 domain={selectedSite.domain}
+                isPaid={isPaid}
                 onChanged={() => {
                   refreshPrompts(selectedSite.id);
                   refreshSites();

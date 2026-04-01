@@ -75,10 +75,11 @@ export async function POST(
         siteId,
         domain: site.domain,
         userEmail: session.user.email,
+        promptIds: [prompt.id],
       },
     });
 
-    logInfo("onboarding", "Queued site/check event for manually added prompt", {
+    logInfo("onboarding", "Queued prompt-level site/check event for manually added prompt", {
       siteId,
       promptId: prompt.id,
       domain: site.domain,
@@ -86,7 +87,7 @@ export async function POST(
       userEmail: session.user.email,
     });
   } catch (sendError) {
-    logError("onboarding", "Failed to queue site/check event for manually added prompt", {
+    logError("onboarding", "Failed to queue prompt-level site/check event for manually added prompt", {
       siteId,
       promptId: prompt.id,
       domain: site.domain,

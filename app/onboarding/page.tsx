@@ -9,8 +9,9 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
+  DialogTitle
 } from "@/components/ui/dialog";
+import { UpgradeRequiredDialog } from "@/components/upgrade-required-dialog";
 import { useSession } from "@/lib/auth-client";
 
 const ONBOARDING_LOCK_KEY = "onboarding_setup_lock";
@@ -20,6 +21,7 @@ export default function OnboardingPage() {
   const { data: session, isPending } = useSession();
   const [status, setStatus] = useState("Setting up your account…");
   const [existingSiteId, setExistingSiteId] = useState<string | null>(null);
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
 
   useEffect(() => {
     if (isPending) return;
@@ -52,11 +54,24 @@ export default function OnboardingPage() {
         const siteRes = await fetch("/api/sites", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ domain }),
+          body: JSON.stringify({ domain })
         });
 
-        if (!siteRes.ok) throw new Error("Failed to create site");
-        const site = await siteRes.json();
+        const siteData = await siteRes.json().catch(() => null);
+
+        if (!siteRes.ok) {
+          if (siteData?.code === "free_plan_site_limit") {
+            sessionStorage.removeItem("pending_domain");
+            sessionStorage.removeItem(ONBOARDING_LOCK_KEY);
+            setStatus("Premium required to add another website.");
+            setShowUpgradeDialog(true);
+            return;
+          }
+
+          throw new Error(siteData?.error ?? "Failed to create site");
+        }
+
+        const site = siteData;
         createdSiteId = site.id;
 
         if (site.existing) {
@@ -71,7 +86,7 @@ export default function OnboardingPage() {
         const agentRes = await fetch("/api/agent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ domain, siteId: site.id, mode: "initial" }),
+          body: JSON.stringify({ domain, siteId: site.id, mode: "initial" })
         });
         if (!agentRes.ok) {
           const data = await agentRes.json().catch(() => null);
@@ -90,7 +105,10 @@ export default function OnboardingPage() {
 
         if (createdSiteId) {
           setStatus("Prompt generation failed. Redirecting to dashboard…");
-          setTimeout(() => router.push(`/dashboard?siteId=${createdSiteId}`), 2000);
+          setTimeout(
+            () => router.push(`/dashboard?siteId=${createdSiteId}`),
+            2000
+          );
           return;
         }
 
@@ -121,7 +139,7 @@ export default function OnboardingPage() {
           <DialogHeader>
             <DialogTitle>You already have created this website</DialogTitle>
             <DialogDescription>
-              Redirecting you to the dashboard now.
+              View your website in the dashboard.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -137,6 +155,18 @@ export default function OnboardingPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UpgradeRequiredDialog
+        open={showUpgradeDialog}
+        onOpenChange={(open) => {
+          setShowUpgradeDialog(open);
+          if (!open) {
+            router.push("/dashboard");
+          }
+        }}
+        title="Premium required for another website"
+        description="Free accounts can track one website. Go back to your dashboard or upgrade to premium to add a second site."
+      />
     </div>
   );
 }

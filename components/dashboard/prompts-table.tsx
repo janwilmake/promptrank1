@@ -1,8 +1,9 @@
 "use client";
 
-import Image from "next/image";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PromptResultDialog } from "@/components/dashboard/prompt-result-dialog";
 import {
   extractDomainsFromText,
   isLikelyProviderError,
@@ -56,74 +57,62 @@ function getCompetitors(response: string, domain: string) {
 
 function getRankBadgeClass(rank: number | null) {
   if (rank === 1) {
-    return "cursor-help bg-green-100 text-green-700 hover:bg-green-100";
+    return "bg-green-100 text-green-700 hover:bg-green-200";
   }
 
   if (typeof rank === "number") {
-    return "cursor-help bg-orange-100 text-orange-700 hover:bg-orange-100";
+    return "bg-orange-100 text-orange-700 hover:bg-orange-200";
   }
 
-  return "cursor-help bg-green-100 text-green-700 hover:bg-green-100";
+  return "bg-green-100 text-green-700 hover:bg-green-200";
 }
 
-function CompetitorHoverCard({
+function ResultBadgeButton({
+  promptText,
   result,
   domain,
 }: {
+  promptText: string;
   result: PromptResult;
   domain: string;
 }) {
-  const competitors = getCompetitors(result.response, domain);
+  const [open, setOpen] = useState(false);
   const providerError = isLikelyProviderError(result.response);
-  const providerErrorMessage = providerError ? getProviderError(result.response) : null;
+  const competitors = getCompetitors(result.response, domain);
 
   return (
-    <div className="group relative inline-flex">
-      {providerError ? (
-        <Badge className="cursor-help bg-amber-100 text-amber-800 hover:bg-amber-100">!</Badge>
-      ) : result.mentions_domain ? (
-        <Badge className={getRankBadgeClass(result.rank)}>
-          #{result.rank ?? "✓"}
-        </Badge>
-      ) : (
-        <Badge variant="outline" className="cursor-help text-neutral-400">
-          ✗
-        </Badge>
-      )}
-
-      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-72 -translate-x-1/2 rounded-2xl border border-neutral-200 bg-white p-3 text-left shadow-xl group-hover:block">
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">
-          {providerError ? "Provider Error" : "Ranking Websites"}
-        </div>
-
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex cursor-pointer items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300"
+        aria-label={`View ${result.provider} result details for prompt: ${promptText}`}
+        title={providerError ? getProviderError(result.response) : competitors.join(", ")}
+      >
         {providerError ? (
-          <p className="mt-2 text-xs leading-5 text-neutral-700">{providerErrorMessage}</p>
-        ) : competitors.length > 0 ? (
-          <div className="mt-3 space-y-2">
-            {competitors.map((competitor) => (
-              <div
-                key={competitor}
-                className="flex items-center gap-2 rounded-xl border border-neutral-100 px-2 py-1.5"
-              >
-                <Image
-                  src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(competitor)}&sz=32`}
-                  alt=""
-                  width={16}
-                  height={16}
-                  className="h-4 w-4 rounded-sm"
-                  unoptimized
-                />
-                <span className="truncate text-xs text-neutral-700">{competitor}</span>
-              </div>
-            ))}
-          </div>
+          <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200">!</Badge>
+        ) : result.mentions_domain ? (
+          <Badge className={getRankBadgeClass(result.rank)}>#{result.rank ?? "✓"}</Badge>
         ) : (
-          <p className="mt-2 text-xs leading-5 text-neutral-600">
-            No ranking websites were detected in the stored provider response.
-          </p>
+          <Badge variant="outline" className="text-neutral-400 hover:bg-neutral-100">
+            ✗
+          </Badge>
         )}
-      </div>
-    </div>
+      </button>
+
+      <PromptResultDialog
+        selectedResult={
+          open
+            ? {
+                promptText,
+                domain,
+                result,
+              }
+            : null
+        }
+        onOpenChange={setOpen}
+      />
+    </>
   );
 }
 
@@ -190,7 +179,11 @@ export function PromptsTable({
                   }
                   return (
                     <td key={p.id} className="px-3 py-3 text-center">
-                      <CompetitorHoverCard result={result} domain={domain} />
+                      <ResultBadgeButton
+                        promptText={prompt.text}
+                        result={result}
+                        domain={domain}
+                      />
                     </td>
                   );
                 })}
