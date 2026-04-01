@@ -1,4 +1,5 @@
 import { LandingForm } from "@/components/landing-form";
+import { HomeHeaderAction } from "@/components/home-header-action";
 
 export const metadata = {
   title: "PromptRank1 — Track your visibility in AI search",
@@ -15,6 +16,13 @@ export const metadata = {
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-white">
+      <header className="border-b border-neutral-100 bg-white">
+        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
+          <span className="font-semibold text-neutral-900">PromptRank1</span>
+          <HomeHeaderAction />
+        </div>
+      </header>
+
       {/* Hero */}
       <section className="mx-auto max-w-4xl px-6 pt-24 pb-16 text-center">
         <div className="mb-4 inline-flex items-center rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-sm text-neutral-600">
