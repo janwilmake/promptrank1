@@ -12,7 +12,7 @@ export function HomeHeaderAction() {
   }
 
   return (
-    <Button variant="outline" asChild>
+    <Button variant="outline">
       <Link href="/dashboard">Dashboard</Link>
     </Button>
   );
