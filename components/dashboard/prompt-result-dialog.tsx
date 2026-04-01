@@ -188,8 +188,11 @@ function splitMarkdownBlocks(markdown: string): MarkdownBlock[] {
 }
 
 function renderInlineMarkdown(text: string) {
-  const segments: Array<{ type: "text" | "code" | "strong"; value: string }> = [];
-  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g).filter(Boolean);
+  const segments: Array<
+    | { type: "text" | "code" | "strong"; value: string }
+    | { type: "link"; label: string; href: string }
+  > = [];
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g).filter(Boolean);
 
   for (const part of parts) {
     if (part.startsWith("`") && part.endsWith("`")) {
@@ -199,6 +202,16 @@ function renderInlineMarkdown(text: string) {
 
     if (part.startsWith("**") && part.endsWith("**")) {
       segments.push({ type: "strong", value: part.slice(2, -2) });
+      continue;
+    }
+
+    const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (linkMatch) {
+      segments.push({
+        type: "link",
+        label: linkMatch[1],
+        href: linkMatch[2],
+      });
       continue;
     }
 
@@ -222,6 +235,20 @@ function renderInlineMarkdown(text: string) {
         <strong key={`${segment.type}-${index}`} className="font-semibold text-neutral-950">
           {segment.value}
         </strong>
+      );
+    }
+
+    if (segment.type === "link") {
+      return (
+        <a
+          key={`${segment.type}-${index}`}
+          href={segment.href}
+          target="_blank"
+          rel="noreferrer"
+          className="text-neutral-950 underline decoration-neutral-300 underline-offset-4 transition-colors hover:text-neutral-700 hover:decoration-neutral-500"
+        >
+          {segment.label}
+        </a>
       );
     }
 
