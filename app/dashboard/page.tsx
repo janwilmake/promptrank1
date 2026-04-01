@@ -7,6 +7,14 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { CompetitorsOverview } from "@/components/dashboard/competitors-overview";
 import { RankingWebsitesOverview } from "@/components/dashboard/ranking-websites-overview";
 import { SiteSelector } from "@/components/dashboard/site-selector";
@@ -44,6 +52,9 @@ function DashboardContent() {
   );
   const [isNew] = useState(searchParams.get("new") === "true");
   const [retryingInitialGeneration, setRetryingInitialGeneration] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deletingSite, setDeletingSite] = useState(false);
+  const [deleteSiteError, setDeleteSiteError] = useState("");
 
   useEffect(() => {
     if (isPending) return;
@@ -152,6 +163,44 @@ function DashboardContent() {
     }
   }
 
+  async function handleDeleteSite() {
+    if (!selectedSite) {
+      return;
+    }
+
+    setDeleteSiteError("");
+    setDeletingSite(true);
+
+    try {
+      const response = await fetch(`/api/sites/${selectedSite.id}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.error ?? "Failed to delete site");
+      }
+
+      const remainingSites = sites.filter((site) => site.id !== selectedSite.id);
+      const nextSite = remainingSites[0] ?? null;
+
+      setSites(remainingSites);
+      setSelectedSiteId(nextSite?.id ?? null);
+      setPrompts([]);
+      setPromptsLoading(Boolean(nextSite));
+      setConfirmDeleteOpen(false);
+
+      router.replace(nextSite ? `/dashboard?siteId=${nextSite.id}` : "/dashboard");
+    } catch (error) {
+      setDeleteSiteError(
+        error instanceof Error ? error.message : "Failed to delete site"
+      );
+    } finally {
+      setDeletingSite(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-neutral-50">
       {/* Header */}
@@ -239,6 +288,14 @@ function DashboardContent() {
                   </p>
                 )}
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmDeleteOpen(true)}
+                className="border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50 hover:text-red-800"
+              >
+                Remove site
+              </Button>
             </div>
 
             <Separator className="mb-6" />
@@ -278,6 +335,41 @@ function DashboardContent() {
           </>
         )}
       </div>
+
+      <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Remove this site?</DialogTitle>
+            <DialogDescription>
+              {selectedSite
+                ? `This will permanently remove ${selectedSite.domain} and all of its prompts, results, competitors, ranking history, and check runs.`
+                : "This will permanently remove the selected site and all related data."}
+            </DialogDescription>
+          </DialogHeader>
+          {deleteSiteError && (
+            <p className="text-sm text-red-600">{deleteSiteError}</p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setConfirmDeleteOpen(false);
+                setDeleteSiteError("");
+              }}
+              disabled={deletingSite}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteSite}
+              disabled={deletingSite}
+            >
+              {deletingSite ? "Removing…" : "Remove site"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
