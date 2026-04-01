@@ -16,8 +16,8 @@ interface Site {
   id: string;
   domain: string;
   last_checked: string | null;
-  initial_prompt_generation_status?: string;
-  initial_prompt_generation_error?: string | null;
+  initial_prompt_generation_status: string;
+  initial_prompt_generation_error: string | null;
 }
 
 interface Props {
