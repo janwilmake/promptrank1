@@ -15,6 +15,8 @@ interface Site {
   id: string;
   domain: string;
   last_checked: string | null;
+  initial_prompt_generation_status?: string;
+  initial_prompt_generation_error?: string | null;
 }
 
 interface Props {
@@ -48,12 +50,18 @@ export function SiteSelector({ sites, selectedId, onSelect, onSiteAdded }: Props
       }
 
       const site = await res.json();
+      if (site.existing) {
+        onSelect(site.id);
+        setDomain("");
+        setOpen(false);
+        return;
+      }
 
       // Kick off agent research
       fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: site.domain, siteId: site.id }),
+        body: JSON.stringify({ domain: site.domain, siteId: site.id, mode: "initial" }),
       });
 
       onSiteAdded(site);

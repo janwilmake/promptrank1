@@ -10,7 +10,7 @@ export async function GET() {
 
   const { data, error } = await adminDb
     .from("sites")
-    .select("id, domain, created_at, last_checked")
+    .select("id, domain, created_at, last_checked, initial_prompt_generation_status, initial_prompt_generation_error")
     .eq("user_id", session.user.id)
     .order("created_at", { ascending: false });
 
@@ -35,14 +35,14 @@ export async function POST(req: NextRequest) {
   const { data, error } = await adminDb
     .from("sites")
     .insert({ user_id: session.user.id, domain: normalizedDomain })
-    .select("id, domain, created_at, last_checked")
+    .select("id, domain, created_at, last_checked, initial_prompt_generation_status, initial_prompt_generation_error")
     .single();
 
   if (error) {
     if (error.code === "23505") {
       const { data: existingSite, error: existingSiteError } = await adminDb
         .from("sites")
-        .select("id, domain, created_at, last_checked")
+        .select("id, domain, created_at, last_checked, initial_prompt_generation_status, initial_prompt_generation_error")
         .eq("user_id", session.user.id)
         .eq("domain", normalizedDomain)
         .single();
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
           userId: session.user.id,
           userEmail: session.user.email,
         });
-        return NextResponse.json(existingSite);
+        return NextResponse.json({ ...existingSite, existing: true });
       }
     }
 
@@ -74,5 +74,5 @@ export async function POST(req: NextRequest) {
     userEmail: session.user.email,
   });
 
-  return NextResponse.json(data, { status: 201 });
+  return NextResponse.json({ ...data, existing: false }, { status: 201 });
 }

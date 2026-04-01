@@ -18,6 +18,8 @@ interface Site {
   id: string;
   domain: string;
   last_checked: string | null;
+  initial_prompt_generation_status: string;
+  initial_prompt_generation_error: string | null;
 }
 
 interface Subscription {
@@ -41,6 +43,7 @@ function DashboardContent() {
     Boolean(searchParams.get("siteId"))
   );
   const [isNew] = useState(searchParams.get("new") === "true");
+  const [retryingInitialGeneration, setRetryingInitialGeneration] = useState(false);
 
   useEffect(() => {
     if (isPending) return;
@@ -108,6 +111,47 @@ function DashboardContent() {
   const isPaid = subscription?.status === "active";
   const selectedSite = sites.find((s) => s.id === selectedSiteId);
 
+  async function refreshSites() {
+    const sitesRes = await fetch("/api/sites");
+    const sitesData = sitesRes.ok ? await sitesRes.json() : [];
+    setSites(sitesData);
+  }
+
+  async function refreshPrompts(siteId: string) {
+    setPromptsLoading(true);
+    try {
+      const response = await fetch(`/api/sites/${siteId}/prompts`);
+      const data = await response.json();
+      setPrompts(Array.isArray(data) ? data : []);
+    } finally {
+      setPromptsLoading(false);
+    }
+  }
+
+  async function handleRetryInitialGeneration() {
+    if (!selectedSite) {
+      return;
+    }
+
+    setRetryingInitialGeneration(true);
+
+    try {
+      await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          domain: selectedSite.domain,
+          siteId: selectedSite.id,
+          mode: "initial",
+        }),
+      });
+    } finally {
+      await refreshSites();
+      await refreshPrompts(selectedSite.id);
+      setRetryingInitialGeneration(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-neutral-50">
       {/* Header */}
@@ -158,6 +202,30 @@ function DashboardContent() {
 
         {selectedSite && (
           <>
+            {selectedSite.initial_prompt_generation_status === "failed" && (
+              <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-medium">Prompt generation failed.</p>
+                    {selectedSite.initial_prompt_generation_error && (
+                      <p className="mt-1 break-words text-red-700">
+                        {selectedSite.initial_prompt_generation_error}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRetryInitialGeneration}
+                    disabled={retryingInitialGeneration}
+                    className="border-red-300 bg-white text-red-800 hover:bg-red-100"
+                  >
+                    {retryingInitialGeneration ? "Retrying…" : "Retry generation"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h1 className="text-xl font-semibold text-neutral-900">
@@ -189,15 +257,8 @@ function DashboardContent() {
                 siteId={selectedSite.id}
                 domain={selectedSite.domain}
                 onChanged={() => {
-                  setPromptsLoading(true);
-                  fetch(`/api/sites/${selectedSite.id}/prompts`)
-                    .then((response) => response.json())
-                    .then((data) => {
-                      setPrompts(Array.isArray(data) ? data : []);
-                    })
-                    .finally(() => {
-                      setPromptsLoading(false);
-                    });
+                  refreshPrompts(selectedSite.id);
+                  refreshSites();
                 }}
               />
 

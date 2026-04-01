@@ -49,12 +49,15 @@ export function AddPromptForm({ siteId, domain, onChanged }: Props) {
         body: JSON.stringify({ domain, siteId }),
       });
       if (!res.ok) {
-        throw new Error("Failed to generate suggestions");
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? "Failed to generate suggestions");
       }
       setStatus("New prompts generated and queued for testing.");
       onChanged?.();
-    } catch {
-      setStatus("Failed to generate suggestions.");
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : "Failed to generate suggestions."
+      );
     } finally {
       setGenerating(false);
     }

@@ -8,6 +8,19 @@ export interface DomainResearch {
 
 const MAX_GENERATED_PROMPTS = 5;
 
+function formatApiError(prefix: string, text: string) {
+  try {
+    const parsed = JSON.parse(text) as {
+      error?: { message?: string };
+      message?: string;
+    };
+    const message = parsed.error?.message ?? parsed.message;
+    return `${prefix}: ${message ?? text}`;
+  } catch {
+    return `${prefix}: ${text}`;
+  }
+}
+
 function normalizePrompts(prompts: unknown): string[] {
   if (!Array.isArray(prompts)) {
     return [];
@@ -97,7 +110,7 @@ export async function researchDomainAndGeneratePrompts(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Parallel.ai error: ${text}`);
+    throw new Error(formatApiError("Parallel.ai error", text));
   }
 
   const data = await res.json();
@@ -147,7 +160,7 @@ Return only valid JSON, no markdown.`,
 
   if (!synthesisRes.ok) {
     const text = await synthesisRes.text();
-    throw new Error(`OpenRouter synthesis error: ${text}`);
+    throw new Error(formatApiError("OpenRouter synthesis error", text));
   }
 
   const synthesisData = await synthesisRes.json();

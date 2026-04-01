@@ -2,6 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useSession } from "@/lib/auth-client";
 
 const ONBOARDING_LOCK_KEY = "onboarding_setup_lock";
@@ -10,6 +19,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const { data: session, isPending } = useSession();
   const [status, setStatus] = useState("Setting up your account…");
+  const [existingSiteId, setExistingSiteId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isPending) return;
@@ -23,6 +33,7 @@ export default function OnboardingPage() {
         typeof window !== "undefined"
           ? sessionStorage.getItem("pending_domain")
           : null;
+      let createdSiteId: string | null = null;
 
       if (!domain) {
         router.push("/dashboard");
@@ -46,23 +57,44 @@ export default function OnboardingPage() {
 
         if (!siteRes.ok) throw new Error("Failed to create site");
         const site = await siteRes.json();
+        createdSiteId = site.id;
+
+        if (site.existing) {
+          sessionStorage.removeItem("pending_domain");
+          sessionStorage.removeItem(ONBOARDING_LOCK_KEY);
+          setStatus("Redirecting to dashboard…");
+          setExistingSiteId(site.id);
+          return;
+        }
 
         setStatus("Researching your domain and generating prompts…");
         const agentRes = await fetch("/api/agent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ domain, siteId: site.id }),
+          body: JSON.stringify({ domain, siteId: site.id, mode: "initial" }),
         });
-        if (!agentRes.ok) throw new Error("Failed to generate prompts");
+        if (!agentRes.ok) {
+          const data = await agentRes.json().catch(() => null);
+          throw new Error(data?.error ?? "Failed to generate prompts");
+        }
 
         sessionStorage.removeItem("pending_domain");
         sessionStorage.removeItem(ONBOARDING_LOCK_KEY);
         setStatus("Almost done — testing your prompts…");
 
         router.push(`/dashboard?siteId=${site.id}&new=true`);
-      } catch {
+      } catch (error) {
         sessionStorage.removeItem(ONBOARDING_LOCK_KEY);
-        setStatus("Something went wrong. Redirecting to dashboard…");
+        const message =
+          error instanceof Error ? error.message : "Something went wrong.";
+
+        if (createdSiteId) {
+          setStatus("Prompt generation failed. Redirecting to dashboard…");
+          setTimeout(() => router.push(`/dashboard?siteId=${createdSiteId}`), 2000);
+          return;
+        }
+
+        setStatus(message);
         setTimeout(() => router.push("/dashboard"), 2000);
       }
     }
@@ -76,6 +108,35 @@ export default function OnboardingPage() {
         <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-neutral-900 border-t-transparent" />
         <p className="text-neutral-600">{status}</p>
       </div>
+
+      <Dialog
+        open={Boolean(existingSiteId)}
+        onOpenChange={(open) => {
+          if (!open && existingSiteId) {
+            router.push(`/dashboard?siteId=${existingSiteId}`);
+          }
+        }}
+      >
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>You already have created this website</DialogTitle>
+            <DialogDescription>
+              Redirecting you to the dashboard now.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                if (existingSiteId) {
+                  router.push(`/dashboard?siteId=${existingSiteId}`);
+                }
+              }}
+            >
+              Go to dashboard
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -10,6 +10,8 @@ export type Database = {
           domain: string;
           created_at: string;
           last_checked: string | null;
+          initial_prompt_generation_status: string;
+          initial_prompt_generation_error: string | null;
         };
         Insert: {
           id?: string;
@@ -17,6 +19,8 @@ export type Database = {
           domain: string;
           created_at?: string;
           last_checked?: string | null;
+          initial_prompt_generation_status?: string;
+          initial_prompt_generation_error?: string | null;
         };
         Update: {
           id?: string;
@@ -24,6 +28,8 @@ export type Database = {
           domain?: string;
           created_at?: string;
           last_checked?: string | null;
+          initial_prompt_generation_status?: string;
+          initial_prompt_generation_error?: string | null;
         };
         Relationships: [];
       };
