@@ -45,7 +45,7 @@ export async function sendResultsEmail(
     subject: `PromptRank1: Results ready for ${domain}`,
     html: `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-        <h1 style="color:#111">Your AI visibility results for <strong>${domain}</strong></h1>
+        <h1 style="color:#111">Your AI visibility results for <strong>${domain}</strong>...</h1>
         <p>We tested ${summaries.length} prompts across ${new Set(summaries[0]?.results.map((r) => r.provider)).size} AI providers.</p>
         <p><strong>${domain}</strong> appeared in <strong>${mentionCount} of ${totalChecks}</strong> responses.</p>
 
@@ -70,6 +70,6 @@ export async function sendResultsEmail(
           PromptRank1 — Track your visibility in AI search
         </p>
       </div>
-    `,
+    `
   });
 }
